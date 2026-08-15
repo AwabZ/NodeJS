@@ -25,3 +25,16 @@ class Person {
     }
 }
 
+/*
+module.exports.sum = sum;
+module.exports.Person = Person;
+module.exports.PI = PI;
+*/
+
+module.exports = {
+    sum : sum,
+    Person : Person,
+    PI : PI
+};
+
+
