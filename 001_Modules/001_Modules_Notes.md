@@ -15,3 +15,5 @@ our application instead of having it all inside one file.
 - We define this variable through `const Module2Tools = require('./Module2.js')`
 - FYI: By Printing out the contents of the required variable, we can actually see everything that its module exports and makes available to us:
 ![alt text](../999_Images_Folder/ImportExport.png)
+-Since `Module2Tools` here is nothing but the function received from `Module2.js` (Module2 Only Exported the Sum Function), then using `Module2Tools` directly is like using the `sum` function from `Module2.js` directly.
+-So, we can actually call `console.log(Module2Tools(1,4))` and it will print out (5).
