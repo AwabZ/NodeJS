@@ -7,7 +7,7 @@ our application instead of having it all inside one file.
 ### Explained Example:
 - We have this `sum` function in `Module2.js`. Now, let's say that we want to exxpose it to the world so that any module that wants to use it, such as `Module1.js`, may simply Import it and use it right away instead of having to implement it from scratch. How do we do this?
 
-#### Method 1:
+#### Importing & Exporting a Function:
 - What we can do is go to `Module2.js` and write `module.exports = sum;`
 - This makes the `sum` function available as one of the exports of `Module2.js`.
 - Now, we need to tell `Module1.js` where this `sum` function is located. 
@@ -17,3 +17,9 @@ our application instead of having it all inside one file.
 ![alt text](../999_Images_Folder/ImportExport.png)
 -Since `Module2Tools` here is nothing but the function received from `Module2.js` (Module2 Only Exported the Sum Function), then using `Module2Tools` directly is like using the `sum` function from `Module2.js` directly.
 -So, we can actually call `console.log(Module2Tools(1,4))` and it will print out (5).
+
+
+#### Importing and Exporting Multiple Things:
+-Now, let's say you want to import multiple functions, variables, or even a class. How do we do that? Let's create a const `PI` and a class `Person` in `Module2.js`. There are actually multiple ways to do this:
+
+##### Adding Multiple Properties to the `module.exports` Object:
