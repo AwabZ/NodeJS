@@ -21,4 +21,25 @@ eventEmitter.on("tutorial", () => {
 - We can actually emit a `tutorial` event using this line of code:
   `eventEmitter.emit("tutorial");`. Typically, you would have some sort of thing happen, like a Button Click, a Function Call, an object instantiation, etc., that would end up Invoking this `emit("event")` function for your custom-defined events like "tutorial", but for the sake of learning, we'll just manually call it out in the open for no reason to emit the "tutorial" event to see how the `on()` function catches this event and executes its function.
 - By the way, notice how the `emit("tutorial)` call comes AFTER the `on("tutorial)"` event listener is defined. The Listener obviously only listens to events occurring after it has been defined. 
+![alt text](../999_Images_Folder/TutorialEventIntro.png)
+
+- Now, what if we wanted the `function` to have parameters and receieve them from the Emitted Event? Well, we give the function the parameters it needs:
+```
+eventEmitter.on("tutorial", (num1, num2) => {
+  console.log(`The Sum is: ${num1 + num2}`);
+});
+```
+- Then, we make the Emitter itself actually pass output data when the event is emitted: `eventEmitter.emit("tutorial", 4, 2);`
+![alt text](../999_Images_Folder/EventEmitterWithParameters.png)
+
+### Custom Event Listener Objects:
+- Let's say you want to create your own object which also takes advantage of using events? Currently, we have to use the EventEmitter class itself and its instances in order to emit or listen to events, but what if I wanted to have my own custom object which can also do these things? 
+- Well, all you have to do is to make a class that `extends` the `EventEmitter` class, use the `super()` function at the start of the `constructor()`, and then instances of that class will be able to use the `emit()` and `on()` functions as well!
+- Checkout the `Person` class defined. Since it `extends EventEmitter`, an instance of `Person` is also an instance of `EventEmitter`, thus it can use its methods. Notice how we call the `on()` and `emit()` methods using the `Awab` object, which is an instance of the `Person` class. 
+
+
+#### Events Run Synchronously:
+- Lastly, after adding another `Person` object (`Ali`), notice the output here:
+![alt text](../999_Images_Folder/EventsAreSynchronous.png)
+- The thing to get from this is that Events Run Synchronously. The event that gets Emitted first is the one Executed first. 
 
