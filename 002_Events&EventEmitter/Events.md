@@ -42,4 +42,3 @@ eventEmitter.on("tutorial", (num1, num2) => {
 - Lastly, after adding another `Person` object (`Ali`), notice the output here:
 ![alt text](../999_Images_Folder/EventsAreSynchronous.png)
 - The thing to get from this is that Events Run Synchronously. The event that gets Emitted first is the one Executed first. 
-
