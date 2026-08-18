@@ -1,3 +1,5 @@
+- Note: Read the `AEGIS_Events.md` file before this one.
+
 ## What is a Socket?
 - As you already know, a Server has One Physical Network Interface Card (NIC), which is the hardware chip where WIFI connects. That single piece of hardware receives every single piece of data (Packet) meant for the server. 
 
@@ -41,5 +43,32 @@
  - The JSON Web Token (JWT) used to validate this connection is a string hidden inside one of those headers in the `request` object. Typically, the client application (That we'll be building through Electron), places the JWT inside the `Authorization` header. So, although this was omitted from the initially shown code, this is how you'd probably extract the JWT in reality:
 ![alt text](../999_Images_Folder/GetUserIdFromRequest.png)
 
+- So, when a connection is made with the AEGIS server and the Handshake is completed, a `connection` event is emitted by NodeJS itself with two output objects `socket` and `request`, (and any third-party Socket.io or ws object is able to listen to this emitted event as long as it has `connection` as its event)
+- So, the line `wssServer.on('connection', (socket, request) => {})` listens to this `connection` event, reacts to every connected user, gathers the outputted `socket` and `request` objects as they will both be incredibly important to us in:
+  - The `socket` object is used to actually get the data of the Evidence Gathering process that will be sent from the User to the Socket in the OS Kernel.
+  - The `request` object is used to get information about the User and the initial HTTP request itself. It contains the JWT token with the UserID and the Target Website URL. When we create a `Tunnel` for the user before any data is transmitted, we need that `userId` to bind every `socket` object with its corresponding user's ID in the Map Object: (`userId` : `socket`) pairs. 
 
-- So, when a connection is made with the AEGIS server and the Handshake is completed, a `connection` event is emitted , the line `wssServer.on('connection', (socket, request) => {})`
+
+- Again, this is very important to note, these Third-Party libraries like `Socket.io` were programmed such that if an instance (`wssServer`) of the `Socket.io` class was setup to listen for a `connection` event through `wssServer.on("connection",..)`, it will actually automatically listen to any successful connection made with the server, take in the parameters (`socket` and `request`) resulting from that connection, and have its callback `function(..)` invoked from that `connection` event. This is very unlike other events where you have to, from the same object, both `emit("data")` and `on("data")` the event in order for the listener to actually listen to that even and invoke its callback function. In this case, you don't actually have to `emit("connection")` yourself at all. 
+
+- Another extremely important thing to remember is that the returned `socket` object that you get from an invoked `connection` event is incredibly important as it is a reference to the physical Socket inside the Kernel's Memory. 
+ - Since this `socket` object is also a very special type of `EventEmitter` object setup by Third-Party Libraries, it actually can listen in on the Kernel-Level any respond to events happening on the Kernel Memory-Level without any `emit()` calls.
+ - More Specifically, a `socket` object will listen to and respond to any `data` event that occurs at the Kernel Memory Location that it is referencing. This means that any incoming packets from the user's EvidenceGathering process that land in that physical Socket will actually immediate invoke the corresponding `socket` object's `data` event and will pass the new incoming data (`packet`) that caused this event to its callback function in the EventListener: `socket.on("data", (packet) => {})`. 
+ - You may be wondering, "but I don't see any `socket.on("data", (packet) => {})` in the code. So what's going on here and how are we listening in to the incoming packets?" This will be discussed shortly.
+
+- In the same sense, the `request` object is also a special object, but we mostly only use it to extract the HTTP Request data that established the connection. We don't really attach any listeners to it.
+
+## The Power Of The Socket Objects and The "Tunnel" Class:
+- In the following code Snippet from our previously demonstrated code:
+![alt text](../999_Images_Folder/SocketTunnelSnippet.png)
+- You might be wondering, "Why are we passing the `socket` object to the constructor of each `Tunnel` object?", "What even is the Class Definition for the `Tunnel` class?", or where that `packet` in the `userTunnel.on("data", (packet) => {..})` is coming from?
+
+- One thing incredibly important to understand is that this `Tunnel` class is an "Empty" class. By that we mean that we actually custom-defined this class, it's not a pre-built one. This means that this class doesn't actually know what's going on in the operating system as it's not tied to it whatsoever (Unlike those third-party classes like `Socket.io` which were made to listen in on the OS Kernel-Level). 
+- Basically, remember how since the `socket` object is a result of a successful connection (Output of a successful emitting of a "connection" event) and that it is a "special object" that listens in on the Kernel-Level to new incoming packets at that corresponding Physical Socket's Memory Location in the Kernel? How it can, by listening in to the `data` event, not only actually detect every single packet that hits that Physical Socket but also actually obtain that packet and make it available to us for use? 
+- Well, the `Tunnel` class is NOT a special class, it's objects are NOT special objects. They cannot do this. We're defining the `Tunnel` class ourselves; It does not have the capability to listen in to incoming data at the Kernel-Level or access it. So, if we define our `Tunnel` class normally and write `UserTunnel.on("data" (packet) => {})`. It won't actually listen in to anything by itself; This same UserTunnel object would have to emit this `data` event itself and pass the `packet` manually: `User.Tunnel.emit("data", packet)` in order for the `UserTunnel.on("data")` EventListener to catch that. So, why on earth do we have this line of code then?
+![alt text](../999_Images_Folder/UserTunnelOn.png)
+- Wouldn't this mean that we'd have to use the `socket` object itself directly in order to actually sense these incoming packets and receive them? But that would also mean that we lose all access to the special features of our `Tunnel` class that we need for other purposes as we're having to use this special `socket` object exclusively. So, what is actually happening?
+
+### The "Tunnel" Class Definition:
+
+
