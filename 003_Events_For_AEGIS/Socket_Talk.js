@@ -20,12 +20,13 @@ wssServer.on('connection', (socket, request) => {
     });
 
     // 5. Automatic Cleanup on disconnect
-    socket.on('close', () => {
+    userTunnel.on('close', () => {
         userTunnel.cleanup();
         activeTunnels.delete(userId); // Removed from memory
         console.log(`User ${userId} disconnected. Remaining: ${activeTunnels.size}`);
     });
 });
+
 
 
 
@@ -39,6 +40,42 @@ function getUserIdFromRequest(request){
     return userId;
 }
 
+
+
+
+// Tunnel Class Definition:
+
+const EventEmitter = require('events');
+
+class Tunnel extends EventEmitter {
+    constructor(userId, socket) {
+        super(); // Initializes the custom EventEmitter memory block
+        this.userId = userId;
+        this.socket = socket; 
+
+        // THE MAPPING:
+        // We listen to the raw OS socket. When IT receives data...
+        this.socket.on('data', (Packet) => {
+            
+            // ...we tell OUR custom Tunnel object to emit that same data.
+            this.emit('data', Packet); 
+            
+        });
+
+        this.socket.on('error', (err) => {
+            this.emit('error', err);
+        });
+
+        this.socket.on('close', () => {
+            this.emit('close');
+        });
+    }
+
+    cleanup() {
+        // Custom method to physically kill the network connection when done
+        this.socket.destroy(); 
+    }
+}
 
 
 

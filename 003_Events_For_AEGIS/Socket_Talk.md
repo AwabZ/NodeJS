@@ -1,5 +1,10 @@
 - Note: Read the `AEGIS_Events.md` file before this one.
 
+## Why This File Exists:
+- This whole discussion exists because there was a lot of ambiguity left in the previous code shown in the `AEGIS_Events.md` file. More specifically, this code block when we discussed Multiple Users:
+![alt text](../999_Images_Folder/AEGISEventsMultiUserExample.png)
+
+
 ## What is a Socket?
 - As you already know, a Server has One Physical Network Interface Card (NIC), which is the hardware chip where WIFI connects. That single piece of hardware receives every single piece of data (Packet) meant for the server. 
 
@@ -27,6 +32,8 @@
     - When a packet hits the physical NIC, the kernel reads the header. It sees `User IP + Port 51234 -> Server IP + Port 443`. The kernel searches its internal hash table for that exact 4-tuple. When it finds the match, it identifies the File Descriptor (e.g., fd = 104), puts the data into the socket's kernel bugger, and signals to `libuv` that data has arrived at this specific socket.
     - So, each 4-tuple represents a Socket. That Socket is acquired by taking the 4-tuple, searching the internal hash table for its corresponding file descriptor, and taking that integer as an index for the array of Sockets to find the particular socket represented by that 4-tuple. 
     - Since that Socket is meant only for the communication between the AEGIS Server and a Particular User Machine, there is no ambiguity in who the packets belong to. 
+
+- This whole thing is actually called "Multiplexing" where you have multiple distinct streams flowing into the same port, with each stream having its own Socket and File Descriptor that directly corresponds to each distinct 4-tuple, to remove any ambiguity in the routing of packets throughout these different streams.
 
 ## The JavaScript Socket Object: 
 - There exists this code snippet from the code we've previously shown:
@@ -70,5 +77,34 @@
 - Wouldn't this mean that we'd have to use the `socket` object itself directly in order to actually sense these incoming packets and receive them? But that would also mean that we lose all access to the special features of our `Tunnel` class that we need for other purposes as we're having to use this special `socket` object exclusively. So, what is actually happening?
 
 ### The "Tunnel" Class Definition:
+- First of all, as we know, `userId` and `socket` are both passed into the constructor of the `Tunnel` class, the `Tunnel` class will inherit from `EventEmitter`, and it will obviously call `super()` right at the start of the constructor:
+![alt text](../999_Images_Folder/TunnelClassConstructorStart.png)
 
 
+- The sole reason we pass the `socket` special object into the constructor of every `Tunnel` object is because we will burn the special properties of the `socket` object directly into each corresponding `Tunnel` object from within the constructor itself.
+- Basically, whenever we create a new `Tunnel` object, we want to link it with a `socket` object such that whenever the `socket` object listens in to a new incoming `packet` that just hit the Physical Socket through the `data` event: `this.socket.on("data", (packet) => {})`, our Custom `Tunnel` object itself will emit that same data: `this.emit("data", packet);`: 
+![alt text](../999_Images_Folder/TunnelClassConstructorOn.png)
+- This way, the `socket` object and reacts to every `Packet` that hits the Physical Socket under the `data` event, then activatives its callback function; In that function, it makes the `Tunnel` object itself `emit` the same `data` event and output the same `packet` captured by the `socket` object. After which, the `UserTunnel.on("data", (packet) => {})` call that we previously discussed now listens in to that `data` event, catches that `packet`, and executes its callback.
+
+- Not only that, but when the `socket` object itself gets an `error` event on the OS-Level and listens to it: `this.socket.on("error", (err) => {})`, the `Tunnel` object should also `emit` that same error: `this.emit("error", (err) => {})` so that we can deal with it through the `Tunnel` object directly.
+- Additionally, whenever the `socket` closes (connection is over) and emits the `close` event, when it catches that event: `this.socket.on("close", ()=> {})`, the `Tunnel` object should also `emit` that same `close` event: `this.emit("close", ()=>{})` so that we can, from the `Tunnel` object itself, deal with this closing of the connection.
+- Furthermore, for the sake of it, imagine we have a `cleanup()` function to destroy socket objects and purge them from memory entirely after the connection is closed.
+![alt text](../999_Images_Folder/FullTunnelClass.png)
+
+- As you can see, from within the constructor itself, as the `Tunnel` object is just being instantiated in real-time, we BURN in the special properties of the new `socket` object given to us by NodeJS into our custom object. This way, we get all the special properties of the `socket` object while having our own custom objects with their own custom methods and functionalities. 
+
+## Notes Regarding The CloseUp:
+- In the end of our Code Block that handles the active users and active tunnels, we wrote this:
+![alt text](../999_Images_Folder/SocketClose.png)
+- In reality, for the sake of good encapsulation, where everything is done through our own custom objects, we should actually be using `userTunnel.on("close")` instead. Both approaches work, but it sort of defeats the encapsulation that we've been building up. 
+![alt text](../999_Images_Folder/SocketCloseFixed.png)
+
+## The "close" Event:
+- When is the "close" event actually fired for a Physical Socket, making the `socket` listen to it? This event happens with a TCP `FIN` (Finish) special packet is sent to the Physical Socket, but when exactly is it sent?
+ - A `FIN` packet is only sent when an application is instructed to tear down the connection (e.g., the user clicks on "Exit" button, closes the physical window, or the code calls `socket.close()`).
+ - If a user's router suddenly disconnects and the machine running the EvidenceGathering process disconnects before being able to send the `FIN` packet. The server will sit there with an open Socket forever, leaking memory, because it never knew that the user vanished.
+ - When we implement "Keep-Alive pings", the client-side Electron App will implement the Keep-Alive logic inside the background process. The Electron app will silently ping the NodeJS server every seconds. If the server misses three pings in a row, it assumes the user's internet died, destroys the socket via the OS, and triggers the JavaScript `close` event to initiate the Docker container cleanup.
+
+- Because a Double-Hop architecture inherently increases routing latency, the execution environment may experience moments of total silence while waiting for the tarrget website to respond. The Server must support extended timeout thresholds (e.g. 60 seconds) to account for this delay.
+- During these periods of silence, ISPs or firewalls may assume the quiet connection is dead and shut down the Tunnel. To prevent this, Websocket Libraries automatically exchange small "Ping" and "Pong" frames every few seconds. This is the "Keep-Alive" Logic. It keeps the connection active without sending actual application data.
+- Furthermore, if the WSS Tunnel drops due to client-side network instability, the client application must implement Keep-Alive logic to attempt reconnection within 1000ms. If the client fails to recoonect within the allocated time period, the server destroys the coket and triggers the `close` event to cleanup the abandoned EvidenceGathering process. 
