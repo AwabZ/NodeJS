@@ -56,7 +56,7 @@
 
 
 ## `libuv` Threads:
-- NodeJS's `libuv` library, created in C++, was developed such that whenever a NodeJS program boots up, `libuv` automatically spawns a "Thread Pool" consisting of 4 threads by default (You can alter this number of threads from 1 up to 1024 using the environemnt variable `process.env.UN_THREADPOOL_SIZE = 8;`).
+- NodeJS's `libuv` library, created in C++, was developed such that whenever a NodeJS program boots up, `libuv` automatically spawns a "Thread Pool" consisting of 4 threads by default (You can alter this number of threads from 1 up to 1024 using the environemnt variable `process.env.UV_THREADPOOL_SIZE = 8;`).
 
 - So, what do these threads even do? It's actually pretty simple. Whenever you call a built-in NodeJS operation, one which is not truly asynchronous (something like a file I/O operation, Compression, Crypto Operations), NodeJS does not want to freeze your main JavaScript Thread and Event Loop to execute this non-background task. So, libuv takes that file request, hands it to one of its internal C++ background threads, and makes it do that task.
 - The thing with `libuv threads` is that they cannot run any JavaScript code at all. They cannot run a for-loop or any JS code that you've written yourself as these are CPU-Bound operations. `libuv` threads can only perform non-CPU-Bound operations that are not truly asynchronous (Since truly asynchronous tasks don't even need threads).
@@ -102,11 +102,15 @@
 - For NodeJS internal tasks: No. NodeJS will spawn the `libuv` threads. The operating system will then automatically push those threads onto other cores. So, your cores are used, but only for these internal tasks and I/O operations. 
 
 
+## How Different Threads Communicate:
+- Because `worker` threads are completed isolated worlds, they do not share variables or memory with the main thread by default. If you change a variable's value inside a worker, the main thread will actually never know and will retain the old value. 
+- To exchange data, threads pass messages back and forth asynchronously using the `postMessage()` API and event listeners.
+
+
+
 ## Can Multiple Threads Run Parts of the Same File (Divide and Conquer Parallelism)? 
 - Previously, we've seen an example where each file instance is offloaded to a single worker thread for it to execute the entire file line by line. However, not only can you do that, but you can write your code such that you also assign half of the file's work to one worker and another half to another worker (or make even more intricate splits like quarters with four workers) and as long as you have Multiple Cores, both threads can execute their assigned portions of the file at the exact same time on separate cores, effectively cutting down execution time in half (Assuming you split the file in half based on work-needed).
 - For example, if you have a file containing a list of 1,000,000 numbers to calculate, you can spawn two workers:
  - Tell `worker1` to process lines 1 -> 500,000
  - Tell `worker2` to process lines 500,001 -> 1,000,000
 
-
-## How Different Threads Communicate:
