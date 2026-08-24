@@ -16,3 +16,22 @@ app.get('/heavy-code', (req, res) => {
 });
 
 
+
+
+// Communication of Two Threads:
+
+// main.js (The Main Thread)
+const { Worker } = require('worker_threads');
+
+// 1. Spawn the worker and point it to the worker file
+const worker = new Worker('./worker.js');
+
+// 2. Send data down to the worker thread
+worker.postMessage({ task: 'hash', data: 'mySecretPassword' });
+
+// 3. Listen for the result coming back from the worker
+worker.on('message', (result) => {
+  console.log('Received from worker:', result);
+});
+
+

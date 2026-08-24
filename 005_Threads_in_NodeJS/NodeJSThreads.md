@@ -106,6 +106,41 @@
 - Because `worker` threads are completed isolated worlds, they do not share variables or memory with the main thread by default. If you change a variable's value inside a worker, the main thread will actually never know and will retain the old value. 
 - To exchange data, threads pass messages back and forth asynchronously using the `postMessage()` API and event listeners.
 
+- Let's say you're at `main.js` and you spawn a `worker` thread called `worker` that will work on the `worker.js` file and execute it. If you, in `main.js` call:
+ - `worker.postMessaage({ data : "hello" });`
+- Since it is the main thread that is executing this code (even though `worker` refers to the worker thread, not the main one), it is the main thread that's sending this message TO the `worker`. The thread executing the file, executing that line of code, is the one sending the message. Meanwhile, the thread whose object (`worker`) we're using to call the `worker.postMessage()` function is the one on the receiving end.
+- So, the general notation is something a bit like this: `receiver.postMessage(data)`. Meanwhile, the sender is the thread executing that script. 
+
+- Here's the thing, whenever a thread is executing the file assigned to it, it doesn't automatically just know who spawned it. However, there is a direct pipeline to the direct parent thread that spawned it provided by NodeJS and that is the `parentPort`. 
+- If you're in a file (`worker.js`) that you intend to be executed by the child thread of some other thread, then writing `const { parentPort } = require("worker_threads);` gives you direct access to a reference of the parent thread that spawned the thread that will execute this file. A direct reference to the thread whose script states `const worker = new Worker("./worker.js")` in it.
+
+- A thread could technically receive messages from multiple different other threads, even non-parent threads (More on that later, we'll focus on the parent thread only now). So, the thread may want to do something different depending on who it receives the message from as it could intend to do something different with the different data it anticipates from other threads. 
+- So, threads actually receive messages through Event Listeners. A message could come at any time, and they could come in streams. So, a thread needs to always be listening-in to messages and so we treat these message exchanges just like Streams.
+- Whenever a thread sends a message, it emits a `messsage` event which can be listened to. So, if you want to listen to that event on another script being executed by another thread to acquire the data of the message, you'll need a reference to the sender thread. 
+- That brings us to `parentPort`. If the sender thread is your parent (The one that Spawned you), then writing `parentPort("message", (MessageData) => {})` in `worker.js` means that whenever your parent thread (`parentPort`) sends you (`worker`) a message and emits the `message` event, it will be caught and the data sent from the parent thread will be captured in the parameter of the callback function `MessageData`.
+- So, whenever you write `Thread1.on("message", (MessageData) => {})`, the thread (`Thread1`) that you are referencing is actually the sender thread. So, the general notation can be seen as" `senderThread1.on("message", (MessageData) => {})`
+
+- By The Way, the `postMessage(data)` function takes in anything. That `data` parameter could be any JavaScript primitive or object: Strings, Numbers, Booleans, Arrays, or Objects. 
+
+- Now, let's look at what's happening in the following two files:
+  ![alt text](../999_Images_Folder/MainThreadMessage.png)
+
+  - First, we spawn a new `worker` thread. This because a "child thread" of our main thread since the main thread is the one executing this file which happens to spawn the `worker` thread. The `worker` thread is pointed to execute the `worker.js` file.
+  - Then, we write `worker.postMessage({ task: "hash", data: "mySecretPassword"});` Remember, this means that the main thread is sending this object to the `worker` thread. 
+  - Then, the line `worker.on("message", (result) => {console.log("Received from worker", result); });` as discussed, means that the main thread will listen in for a `message` sent to it by the `worker` thread as it expects a response from it. It can capture that response in the `result` parameter so that it can be used.
+
+  ![alt text](../999_Images_Folder/WorkerThreadMessage.png)
+
+  - We start off by getting the reference to the parent thread which spawned the thread running this script: `const { parentPort } = require("worker_threads");`. The `parentPort` object can be used to reference the main thread now.
+  - Then, through `parentPort.on("message", messageFromMain) => {console.log("worker received:", messageFromMain);});` we say whenever the parent main thread emits a "message" event to this thread, we want to catch that event and capture the message within the `messageFromMain` parameter, and then we want to print out that we got this data.
+  - Then, with the `const resultData = messageFromMain.data + "_PROCESSED";` Line it's just a placeholder to say that we then want the thread to obviously do something with this data. The whole reason data is offloaded from the main thread to another thread is for the other worker thread to do something heavy with that data (such as hashing or encrypting it, which is exactly what we'll be doing in AEGIS) without blocking off the main thread's execution, and then the child thread sends the result of the heavy operation on the data back to the main thread to work with seamlessly.
+  - The final line `parentPort.postMessaage(resultData);` is the one that does the sending back. Remember that in `thread.postMessage()`, `thread` referes to the one receiving the message while the thread executing the script is the sender. So, the `parentPort` thread, which is the main thread, is the one receiving the message and the one sending it is the `worker` thread spawned by the main thread.
+  - The main thread receives this data through the `worker.on("message", (result) => {});` line in the `main.js` script in the `result` parameter as whenever the `worker` thread does send the message, it emits the `message` event directly to the parent thread which is caught by this line.
+
+
+- So, the big thing to remember is that it goes like this:
+ - `receiver.postMessage()`
+ - `sender.on()`
 
 
 ## Can Multiple Threads Run Parts of the Same File (Divide and Conquer Parallelism)? 
@@ -113,4 +148,6 @@
 - For example, if you have a file containing a list of 1,000,000 numbers to calculate, you can spawn two workers:
  - Tell `worker1` to process lines 1 -> 500,000
  - Tell `worker2` to process lines 500,001 -> 1,000,000
+
+- However, this won't be discussed right now and will be left for future discussions if needed. 
 
