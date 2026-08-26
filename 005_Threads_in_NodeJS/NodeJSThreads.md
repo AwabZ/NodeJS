@@ -151,3 +151,11 @@
 
 - However, this won't be discussed right now and will be left for future discussions if needed. 
 
+## How We'll Hash in AEGIS:
+- So, how do we hash the evidence without freezing the server?
+
+- The Amateur Thing would be to write our own custom JS Math to do the hashing. Writing our own custom JS means that if we want to execute the hashing without blocking the main thread, we'd have to spin up a `worker_thread`, which wastes a lot of RAM and resources just to boot up the worker and not only that but we'll have to then `postMessage` the result from the `worker_thread` back to the main thread after it has finished the hashing. Remember, we have so much to Hash in AEGIS. We hash each artifact individually, then we hash the file itself to get the `Final_Hash`, and we also do a lot of hashing in our verification algorithm when a user submits a report for verification. This would be way too expensive.
+
+- The Correct Approach would be to use Node's native built-in `crypto` module. `crypto` is written entirely in C++. When you call `crypto.createHash("sha256")`, NodeJS instantly drops that CPU-heavy math straight into the backgrounf C++ thread pool. Remember how any NodeJS native operation can be immediately executed by the `libuv` thread pool and does not require its own spun up `worker_thread`? Utilizing built-in NodeJS modules is key. 
+
+- This way, we get maximum hardware parallelism, zero main-thread blocking, and 0MB of V8 Clone Overhead, all without writing a single mangual `worker_thread` line of code. 
