@@ -57,17 +57,14 @@
  - However, as soon as the Run-To-Completion Phase ends, **The Micro-Task Queue's Callbacks are all executed until the entire Micro-Task Queue is Emptied out. Only then is the Event-Loop un-frozen.**
  - So, the Micro-Task Queue with its Promise Callbacks is given absolute priority over the Macro-Task Queue of Standard Asynchronous Callbacks. 
 
-## Why Promises and Why The Micro-Task Queue:
-
 
 ## Life After The Run-To-Completion Finishes:
-- After The Macro-Task Queue's Callbacks (The Callbacks of The Promises) are all executed and the Queue is Emptied Out, at this point, the Synchronous JS Code of this file is fully executed, the Callbacks of the Promises are all executed, and the Event-Loop is un-frozen and finally comes to life. 
+- After The Micro-Task Queue's Callbacks (The Callbacks of The Promises) are all executed and the Queue is Emptied Out, at this point, the Synchronous JS Code of this file is fully executed, the Callbacks of the Promises are all executed, and the Event-Loop is un-frozen and finally comes to life. 
 
-- At This Point, your Server is up and running completely with all variables initialized and operates strictly on a User-Event-Driven manner with nothing to execute other than Background Tasks and their corresponding Callbacks, with Event Listeners being the main-driver behind new Callbacks that get executed.
- - If a User Attempts To Connect To The Server, ........
- - If a User Clicks on GatherEvidence, that Event is Caught and .....
- - Whenever Packets are Hitting the Server, .......
- - Whenever .........
+- At This Point, your Server is up and running completely with all variables initialized, memory allocated, and the `wssServer` listening. The NodeJS main thread now operates strictly on a User-Event-Driven manner with nothing to execute other than Background Tasks and their corresponding Callbacks, with Event Listeners being the main-driver behind new Callbacks that get executed. It will spend 99% of its life sleeping inside the Poll Phase, waiting for the Operating System to wake it up when external events occur.
+
+ - If a User Attempts To Connect To The Server, the OS handles the TCP handshake in the background. Once the socket is established, `libuv` drops the `wssServer.on("connection", callback)` Macro-Task into the Poll Queue.  The Event Loop executes it, verifying the user's JWT and adding them to the live active users `Map`.
+ - Whenever Evidence Packets Hit the Server, The Packets fly into the Server's NIC. The OS catches them and buffers them in Kernel Memory. When the Event Loop cycles back to the Poll Phase, it pulls these `Tunnel.on("data", callback)` Macro-Tasks (`callback`) and executes them synchronously.
 
 
 - One very important thing to note is that **Micro-Tasks Always Maintain Absolute Priority**. Even after the Run-To-Completion Phase is over, during any phase of the Event-Loop, **The V8 Engine checks the Micro-Task Queue after Every Single Macro-Task it executes.** So, if the Loop is in the Timers Phase and a Callback (Macro-Task) just got done executing, it will immediately check the Micro-Task Queue to see If any Promise has been Resolved/Rejected since the last time it checked. The same goes for the Poll, Check, Pending, and Close Phases. 
