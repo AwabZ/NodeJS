@@ -76,7 +76,7 @@
    ![alt text](../999_Images_Folder/AEGISPromiseExample.png)
 
  - 1. Execution of Macro-Task 1 (User A):
-  - V8 Pulls User A's connection `callback` from the Poll Queue and runs it. The `callback` is that whole `(socket, request) => {...}` block. The JWT token is extracted from the `request` object and the `userID` is extracted from that. We then call the Producer function `verifyUserDBPromise` that returns the `Promise` object immediately to `authReceipt` and based on the given `userID` queries the DB to check if the User Exists. That `DBCheckQuery` starts getting executed in the background for 10 milliseconds. During this time, V8 is executing the remainder of User A's initial Callback, going over to the `.then()` and `.catch()` lines and appending their callbacks to the `PromiseFulfillResponse` and `PromiseRejectResponse` properties of the Returned, not-yet-valued `authReceipt` Promise Object.
+  - V8 Pulls User A's connection `callback` from the Poll Queue and runs it. The `callback` is that whole `(socket, request) => {...}` block. The JWT token is extracted from the `request` object and the `userID` is extracted from that. We then call the Producer function `verifyUserDBPromise` that returns the `Promise` object immediately to `authReceipt` and based on the given `userID` queries the DB to check if the User Exists. That `DBCheckQuery` starts getting executed in the background for 10 milliseconds. During this time, V8 is executing the remainder of User A's initial Callback, going over to the `.then()` and `.catch()` lines and appending their callbacks to the `PromiseFulfillReactions` and `PromiseRejectReactions` properties of the Returned, not-yet-valued `authReceipt` Promise Object.
  - 2. The Micro-Task Queue Check:
    - V8 Does not immediately move on to User B. Between every single Macro-Task, V8 freezes the Event Loop and looks at the Micro-Task Queue. Right now, it is empty (The database hasn't answered yet). So, V8 releases the Event Loop.
  - 3. Execution of Macro-Task 2 (User B):
@@ -102,5 +102,3 @@
  - When User A's database query finishes, AEGIS needs to verify the JWT and either accept or reject the WSS connection immediately. If V8 put that .then() callback at the back of the Poll Queue, AEGIS would go process a thousand other network packets before it remembered to officially connect User A. User A's connection would time out on the client side.
 
  - The Micro-Task Queue allows V8 to say: "Pause the network intake. We just got the database answer for User A. Finish setting up User A's tunnel right now before we deal with anyone else."
-
- - The Micro-Task Queue allows us to really enforce a strict Chronological Ordering between a Background Task Executing, and its Corresponding Callback strictly occurring after it as soon as possible, while removing the chance of the Callback starting before the Background Task Finishes. 
