@@ -46,7 +46,8 @@
 - **This Entire Process, From the inside-out initiation to the HTTP disguise, is why the Electron App MUST be the one to knock on the AEGIS Server's door, rather than the opposite.**
 
 ## The `ws` library: 
-- Fortunately, this entire library is native to NodeJS, so it'll be pretty easy to use. Again, Fortunately Electron runs NodeJS in the background, so the Electron App will also use the exact same `ws` library. We don't need to manually write the HTTP packet; The library constructs it for us. We just padd it the JWT.
+- This library is not entirely native to NodeJS. So, you'll have to run `npm install ws` to use it. 
+- Fortunately Electron runs NodeJS in the background, so the Electron App will also use the exact same `ws` library. We don't need to manually write the HTTP packet; The library constructs it for us. We just padd it the JWT.
 
 ### What Is The `JWT` Token?
 - A JWT (JSON Web Token) is a string containing three base64-encoded parts: 
@@ -77,7 +78,7 @@
 }
 ```
 
-- 4. The Server Takes Both this `header` JSON object and the ID `Payload` Object of the user and performs Base64 Encoding on them to get rid of any non-safe characters (e.g., `{}`, `""`, or `/`) to get `EncodedHeader` and `EncodedPayload`. This turns them into random strings of length 64 each.
+- 4. The Server Takes Both this `header` JSON object and the ID `Payload` Object of the user and performs Base64 Encoding on them to get rid of any non-safe characters (e.g., `{}`, `""`, or `/`) to get `EncodedHeader` and `EncodedPayload`. This turns them into random strings.
 - 5. The AEGIS Server then joins these two Encoded Strings with a dot (.) in between them: `EncodedHeader.EncodedPayload` and hashes that combined string with the specified hashing algorithm (`alg`). This creates the `Signature`. 
 - 6. The Server Combines All Three Of These Into A Singular String With Dots Between The Strings: **EncodedHeader.EncodedPayload.Signature**. **This Is The JWT**.
 - 7. The Server responds to the HTTP `POST` request with a `200 OK` status and sends the newly-crafted JWT back in the JSON Body:
@@ -114,7 +115,96 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR...
   - So, no random device that's not currently logged in to the AEGIS App can have a Tunnel established for it. Additionally, nobody that intercepts this network packet to try to log in to someone else's account can bypass this check. Also, if supposedly the account with with the payload: `{"id": 1}` was an Admin Account, they cannot intercept their own packet and change its id to "1" because that would cause a mismatch in hash. 
 
 
+## ExpressJS Mention:
+- `ExpressJS` is a lightweight, abstract module built on top of the NodeJS `http` module. With our understanding of the Event Loop, callbacks, and streams, we already understand most of what Express does under the hood. We won't fully explore what Express actually does and is capable of because that would be time consuming and would take us into a detour that focuses more on basic CRUD App boilerplate rather than spending that time in the real challenge which is building the reverse tunnel. 
+- We'll only look at 3 mechanisms that AEGIS actually does end up touching and then we'll move on. It's important to note that these will probably not be the only mechanisms of Express that AEGIS uses, but they're the most obvious one that can be noticed right away. If any further ones are found later on, they'll be explained there.
+
+- To use Express, you just write: `const express = require('express');`
+- You then write `const app = express();`
+- This `app` object can be used to make `app.post()` and `app.get()` setups. We'll see these in a bit and why they're so useful.
+
+- In Pure NodeJS, creating an HTTP server requires the built-in `http` module:
+
+``` JS
+const http = require("http");
+
+const server = http.createServer( (request, response) => {
+    // "request" is a readable stream of incoming TCP bytes.
+    // "response" is a writable stream going back to the client.
+});
+```
+
+- If you try to write a login endpoint using only raw NodeJS, you run into two tedious problems:
+ - 1. **Manual Routing**: You have to write messy `if/else` logic on every request to check what type of request (method of request, either `POST` or `GET`) it is, what type of endpoint (Which url is being requested) of request it is (e.g., login endpoint):
+
+``` JS
+if (request.method === "POST" && request.url === "/api/login") {
+    ............
+}
+```
+  - With Express, we'll see in a bit how this becomes much easier.
+
+ - 2. **Manual Stream Buffering**: The HTTP request body arrives in fragmented chunks across Macro-Tasks. You have to manually capture the chunks, concatenate them, and parse that JSON-formatted string into a native JavaScript Object:
+
+ ``` JS
+let body = ''; // You keep concatenating chunks to this string 
+request.on("data", (chunk) => { body += chunk; });
+request.on("end", () => {
+    const fullRequestBody = JSON.parse(body);
+})
+```
+  - With Express, it is automatically configured to give you the full body of the request with all of its chunks and the object is given as a native JS object, not a JSON.
 
 
+### Use 1: Easy Routing Of Requests: 
+- First of all, instead of having to write `if (request.url === ... && request.method === ...)` under every single received request with the raw `http` module, Express gives you the clean function:
+
+```JS
+app.post("/api/login", (request, response) => {......});
+```
+
+- This literally tells express "**If an Incoming HTTP Packet has method `POST` and path `/api/login`, execute this `(request, response) => {...}` callback. This listener only listens in to these type sof incoming HTTP Packets and that's it.
+- Similarly, you can use `app.get(link, callback)` and it will only listen in to incoming HTTP packets with method `GET` and path `link`, and only then will it execute `callback`. 
+- By the way, do keep in mind that these callbacks are Macro-Tasks that execute Asynchronously (They go to the Poll Queue).
+
+### Use 2: Middleware (Easy Stream Buffering):
+- In Express, a "Middleware" is just a function that intercepts the request stream before your route handler gets it. 
+- To cut things short, when you write the line of code :
+
+```JS
+app.use(express.json())
+```
+
+in the start of your file after declaring `const app = express()`, then, instead of having to deal with chunks of requests as we've shown above where you would have to concatenate these chunks of each request and then convert that JSON String into a Native JS Object, you'll just always have it automatically done for you always.
+- When the raw bytes finish arriving, it runs `JSON.parse()` and attaches the resulting JavaScript Object to the `request.body`. So, depending on the chunks of the request, if it has a chunk called `username` for example, you can just directly access `request.body.username`. 
+
+### Use 3: Response Helpers:
+- When setting up the strings on the headers of an HTTP Response, instead of manually writing a lot of verbose code, you can just set the response to have some specific response status (e.g., `200` for the `200 OK` response), and then setup the (header name: header value) pairs and that JSON with its defined headers are setup inside thet `response` object right away:
+
+```JS
+// Raw Node.js:
+res.writeHead(200, { 'Content-Type': 'application/json' });
+res.end(JSON.stringify({ status: "success" }));
+
+// Express:
+res.status(200).json({ status: "success" });
+```
+
+- It handles setting the `Content-Type: application/json header` and stringifying the object for you.
 
 
+### Express and WebSocket in AEGIS:
+- You'll later notice how Express connects to the native NodeJS HTTP module in our architecture:
+
+```JS
+const express = require("express");
+const http = requre("http");
+
+const app = express(); 
+const server = http.createServer(app);
+```
+
+- When you pass `app` into `http.createServer()`, you are telling Node's native HTTP server: "Whenever a standard HTTP request comes in, let Express handle the URL Routing and JSON parsing".
+
+- However, when an HTTP request contains the `Upgrade: websocket` header, **Express never even sees it**. 
+ - Such a request is only ever seen by the `server.on("upgrade)` Event-Listener. This Event intercepts the TCP socket at the raw NodeJS level BEFORE Express routes it. Express handles the mundane tasks that you would typically see in a Dashboard or CRUD app (logging in, returning JWTs, serving web pages), while pure NodeJS and `ws` handle the reverse tunnel, both of these working on the exact same 443 port. 
