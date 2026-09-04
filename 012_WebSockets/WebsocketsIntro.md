@@ -193,18 +193,3 @@ res.status(200).json({ status: "success" });
 - It handles setting the `Content-Type: application/json header` and stringifying the object for you.
 
 
-### Express and WebSocket in AEGIS:
-- You'll later notice how Express connects to the native NodeJS HTTP module in our architecture:
-
-```JS
-const express = require("express");
-const http = requre("http");
-
-const app = express(); 
-const server = http.createServer(app);
-```
-
-- When you pass `app` into `http.createServer()`, you are telling Node's native HTTP server: "Whenever a standard HTTP request comes in, let Express handle the URL Routing and JSON parsing".
-
-- However, when an HTTP request contains the `Upgrade: websocket` header, **Express never even sees it**. 
- - Such a request is only ever seen by the `server.on("upgrade)` Event-Listener. This Event intercepts the TCP socket at the raw NodeJS level BEFORE Express routes it. Express handles the mundane tasks that you would typically see in a Dashboard or CRUD app (logging in, returning JWTs, serving web pages), while pure NodeJS and `ws` handle the reverse tunnel, both of these working on the exact same 443 port. 
